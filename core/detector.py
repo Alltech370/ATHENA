@@ -48,15 +48,16 @@ class AthenaDetector:
         if model_path is None:
             from .config import Config
             model_path = Config.MODEL_PATH
-            # Se não existe, tentar caminho alternativo
+            # Se não existe, tentar caminhos alternativos (fallback para desenvolvimento local)
             if not Path(model_path).exists():
-                alt_path = "athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt"
-                if Path(alt_path).exists():
-                    model_path = alt_path
+                # Primeiro tentar models/best.pt (padrão de produção)
+                if Path("models/best.pt").exists():
+                    model_path = "models/best.pt"
                 else:
-                    # Tentar models/best.pt
-                    if Path("models/best.pt").exists():
-                        model_path = "models/best.pt"
+                    # Fallback para caminho de desenvolvimento
+                    alt_path = "athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt"
+                    if Path(alt_path).exists():
+                        model_path = alt_path
         
         self.model_path = Path(model_path)
         self.video_source = video_source or os.getenv("RTSP_URL", "0")
@@ -174,9 +175,23 @@ class AthenaDetector:
     def initialize_model(self):
         """Inicializa modelo com configurações otimizadas"""
         try:
+            # Se o modelo não existe, tentar baixar de uma URL se configurado
             if not self.model_path.exists():
-                logger.error(f"❌ Modelo não encontrado: {self.model_path}")
-                return False
+                model_url = os.getenv("MODEL_URL")
+                if model_url:
+                    logger.info(f"📥 Modelo não encontrado localmente. Baixando de: {model_url}")
+                    try:
+                        import urllib.request
+                        self.model_path.parent.mkdir(parents=True, exist_ok=True)
+                        urllib.request.urlretrieve(model_url, str(self.model_path))
+                        logger.info(f"✅ Modelo baixado com sucesso: {self.model_path}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao baixar modelo: {e}")
+                        return False
+                else:
+                    logger.error(f"❌ Modelo não encontrado: {self.model_path}")
+                    logger.error("💡 Configure MODEL_URL no Koyeb para baixar automaticamente")
+                    return False
             
             logger.info(f"🎯 Carregando modelo: {self.model_path}")
             

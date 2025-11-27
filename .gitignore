@@ -130,6 +130,12 @@ runs/
 *.onnx
 *.torchscript
 
+# Exceção: permitir o modelo principal
+!models/best.pt
+
+# Pasta de treinamento (não precisa em produção)
+athena_training_2phase_optimized/
+
 # Dataset files (opcional - descomente se não quiser versionar)
 # datasets/images/
 # datasets/labels/

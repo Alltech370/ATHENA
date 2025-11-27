@@ -16,7 +16,7 @@ class BackendConfig:
     API_RELOAD = os.getenv("API_RELOAD", "false").lower() == "true"
     
     # Configurações do modelo - Usando o melhor modelo treinado da Fase 1
-    MODEL_PATH = os.getenv("MODEL_PATH", "athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt")
+    MODEL_PATH = os.getenv("MODEL_PATH", "models/best.pt")
     MODEL_CONF_THRESH = float(os.getenv("MODEL_CONF_THRESH", "0.25"))
     MODEL_IOU_THRESH = float(os.getenv("MODEL_IOU_THRESH", "0.45"))
     MODEL_MAX_DETECTIONS = int(os.getenv("MODEL_MAX_DETECTIONS", "50"))
@@ -122,13 +122,18 @@ class BackendConfig:
                 print(f"❌ Modelo não encontrado: {model_path}")
                 print(f"📁 Procurando por modelos treinados...")
                 
-                # Procurar por modelos treinados no caminho padrão da Fase 1
-                default_model = Path("athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt")
+                # Procurar por modelos treinados no caminho padrão
+                default_model = Path("models/best.pt")
+                alt_model = Path("athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt")
+                
                 if default_model.exists():
                     print(f"✅ Modelo encontrado: {default_model}")
                     cls.MODEL_PATH = str(default_model)
+                elif alt_model.exists():
+                    print(f"✅ Modelo encontrado (caminho alternativo): {alt_model}")
+                    cls.MODEL_PATH = str(alt_model)
                 else:
-                    print(f"❌ Modelo padrão não encontrado: {default_model}")
+                    print(f"❌ Modelo não encontrado em: {default_model} ou {alt_model}")
                     return False
             
             # Verificar diretório de snapshots

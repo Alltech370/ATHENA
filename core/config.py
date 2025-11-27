@@ -53,12 +53,17 @@ class Config:
         """Valida configurações"""
         model_path = Path(cls.MODEL_PATH)
         if not model_path.exists():
-            # Tentar caminho alternativo
+            # Tentar caminho alternativo (para desenvolvimento local)
             alt_path = Path("athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt")
             if alt_path.exists():
                 cls.MODEL_PATH = str(alt_path)
             else:
-                return False
+                # Último fallback: models/best.pt
+                default_path = Path("models/best.pt")
+                if default_path.exists():
+                    cls.MODEL_PATH = str(default_path)
+                else:
+                    return False
         
         # Criar diretórios de storage
         cls.STORAGE_REPORTS.mkdir(parents=True, exist_ok=True)

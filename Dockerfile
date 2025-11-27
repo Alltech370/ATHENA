@@ -37,11 +37,8 @@ COPY core/ ./core/
 COPY frontend/ ./frontend/
 COPY requirements.txt .
 
-# Copiar modelos - tentar ambos os caminhos possíveis
+# Copiar modelo (39MB - pequeno o suficiente para incluir no build)
 COPY models/ ./models/
-# Copiar modelo do caminho padrão (fallback do código)
-RUN mkdir -p athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights
-COPY athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt ./athena_training_2phase_optimized/models/phase1_complete/athena_phase1_tesla_t4/weights/best.pt
 
 # Criar diretórios necessários
 RUN mkdir -p storage/reports storage/snapshots storage/logs \
@@ -49,6 +46,7 @@ RUN mkdir -p storage/reports storage/snapshots storage/logs \
 
 # Variáveis de ambiente padrão
 # MODEL_PATH será definido pela variável de ambiente no Koyeb ou usa o padrão do código
+# MODEL_URL pode ser configurado para baixar o modelo automaticamente se não existir
 ENV PORT=8000
 ENV API_HOST=0.0.0.0
 ENV API_PORT=8000
