@@ -4,8 +4,7 @@ Sistema inteligente de detecção de Equipamentos de Proteção Individual (EPIs
 
 ## ✨ Características
 
-- **Detecção em Tempo Real**: Identifica pessoas e EPIs (17 classes) via RTSP/P2P ou webcam
-- **Processamento de Vídeos**: Upload e análise de vídeos com detecção frame a frame
+- **Detecção em Tempo Real**: Identifica pessoas e EPIs (17 classes) via RTSP/P2P, webcam ou vídeo local no navegador
 - **Interface Web Responsiva**: Dashboard moderno com Alpine.js e Tailwind CSS
 - **Modelo Treinado**: Utiliza modelo YOLOv11 customizado (best.pt) com 17 classes
 - **Relatórios Dinâmicos**: Geração automática de relatórios baseados em todas as classes detectadas
@@ -21,17 +20,13 @@ athena_project/
 │   ├── config.py           # Configurações centralizadas
 │   └── __init__.py
 │
-├── backend/                 # Backend API (legado - será migrado)
+├── backend/                 # Backend API FastAPI
 │   ├── api_optimized.py    # API FastAPI principal
 │   ├── config.py           # Configurações do backend
-│   ├── video_detection.py  # Detecção em vídeos (legado)
+│   ├── video_detection.py  # Detecção em vídeos
 │   ├── video_report.py     # Sistema de relatórios
 │   ├── history.py          # Histórico de detecções
 │   └── snapshot.py         # Sistema de snapshots
-│
-├── api/                     # Nova estrutura de API (em desenvolvimento)
-│   ├── main.py            # FastAPI app principal
-│   └── routes/            # Rotas organizadas por funcionalidade
 │
 ├── frontend/                # Interface web
 │   ├── index.html         # Página principal
@@ -45,8 +40,6 @@ athena_project/
 │   └── best.pt            # Modelo principal (YOLOv11)
 │
 ├── storage/                 # Dados de produção
-│   ├── videos/            # Vídeos processados
-│   ├── uploads/           # Vídeos enviados
 │   ├── reports/           # Relatórios gerados
 │   ├── snapshots/         # Snapshots
 │   └── logs/              # Logs de produção
@@ -59,7 +52,6 @@ athena_project/
 │   ├── scripts/           # Scripts de treinamento
 │   └── tests/             # Testes
 │
-├── start_api_optimized.py  # Script de inicialização
 └── requirements.txt        # Dependências Python
 ```
 
@@ -104,7 +96,7 @@ ls models/best.pt
 
 1. **Inicie o backend**
 ```bash
-python start_api_optimized.py
+python -m uvicorn backend.api_optimized:app --host 0.0.0.0 --port 3000
 ```
 
 2. **Acesse o frontend**
@@ -172,14 +164,8 @@ REQUIRED_EPIS=helmet,safety-vest,gloves,glasses
 - `GET /stats` - Estatísticas atuais
 - `POST /api/detect-frame` - Detecção em frame individual
 
-### Vídeos
-- `POST /api/videos/upload` - Upload de vídeo
-- `GET /api/videos/list` - Lista de vídeos
-- `GET /api/videos/{id}/status` - Status do processamento
-- `GET /api/videos/{id}/results` - Resultados da detecção
-- `GET /api/videos/{id}/report` - Relatório do vídeo
-- `GET /api/videos/{id}/report/csv` - Exportar relatório CSV
-- `POST /api/videos/realtime/report` - Gerar relatório em tempo real
+### Relatórios
+- `POST /api/videos/realtime/report` - Salvar relatório de detecções em tempo real
 
 ### Configuração
 - `GET /config` - Configurações atuais
@@ -194,14 +180,18 @@ REQUIRED_EPIS=helmet,safety-vest,gloves,glasses
 ## 🎨 Interface Web
 
 ### Views Disponíveis
-1. **Dashboard**: Monitoramento em tempo real com stream de vídeo
-2. **Vídeos**: Upload e visualização de vídeos processados
-3. **Relatório**: Análise estatística e relatórios dinâmicos
-4. **Histórico**: Registro de detecções
-5. **Status**: Monitoramento do sistema (FPS, GPU, uptime)
-6. **Config**: Configurações do sistema
+1. **Dashboard**: Monitoramento em tempo real com stream de vídeo (RTSP/webcam) ou vídeo local
+2. **Relatório**: Análise estatística e relatórios dinâmicos gerados em tempo real
+3. **Status**: Monitoramento do sistema (FPS, GPU, uptime)
+4. **Config**: Configurações do sistema
 
 ## 🔍 Sistema de Detecção
+
+O sistema funciona em **tempo real** no navegador:
+- O usuário carrega um vídeo local ou usa stream RTSP/webcam
+- Cada frame é enviado para `/api/detect-frame` para detecção
+- As detecções são exibidas em tempo real no vídeo
+- O relatório é gerado automaticamente conforme a detecção acontece
 
 O sistema detecta:
 - **Pessoas**: Detecção de pessoas no frame

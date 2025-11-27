@@ -34,8 +34,6 @@ class Config:
     REQUIRED_EPIS = set(os.getenv("REQUIRED_EPIS", "helmet,safety-vest,gloves,glasses").split(','))
     
     # Storage
-    STORAGE_VIDEOS = Path("storage/videos")
-    STORAGE_UPLOADS = Path("storage/uploads")
     STORAGE_REPORTS = Path("storage/reports")
     STORAGE_SNAPSHOTS = Path("storage/snapshots")
     STORAGE_LOGS = Path("storage/logs")
@@ -63,8 +61,6 @@ class Config:
                 return False
         
         # Criar diretórios de storage
-        cls.STORAGE_VIDEOS.mkdir(parents=True, exist_ok=True)
-        cls.STORAGE_UPLOADS.mkdir(parents=True, exist_ok=True)
         cls.STORAGE_REPORTS.mkdir(parents=True, exist_ok=True)
         cls.STORAGE_SNAPSHOTS.mkdir(parents=True, exist_ok=True)
         cls.STORAGE_LOGS.mkdir(parents=True, exist_ok=True)

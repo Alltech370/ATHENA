@@ -13,14 +13,6 @@ const CONFIG = {
             CAMERA_CONFIG: '/camera/config',
             HISTORY: '/history',
             CLASSES: '/classes',
-            VIDEOS_UPLOAD: '/api/videos/upload',
-            VIDEOS_LIST: '/api/videos/list',
-            VIDEOS_STATUS: '/api/videos',
-            VIDEOS_RESULTS: '/api/videos',
-            VIDEOS_DOWNLOAD: '/api/videos',
-            VIDEOS_FORMATS: '/api/videos/formats',
-            VIDEO_REPORT: '/api/videos',
-            VIDEO_REPORT_CSV: '/api/videos',
             REALTIME_REPORT: '/api/videos/realtime/report'
         }
     },
@@ -1380,6 +1372,7 @@ function athenaApp() {
                 });
                 
                 // Contar EPIs únicos por pessoa aproximada
+                const hasTracking = this.trackedPeople.size > 0;
                 for (const [bboxKey, epiSets] of peopleEPIs.entries()) {
                     for (const epiName of epiSets.positive) {
                         // Se tem tracking e já foi contado, não contar novamente
@@ -1788,7 +1781,7 @@ function athenaApp() {
                                             } else {
                                                 // Se não encontrou pessoa, ainda logar a detecção negativa
                                                 // Mas sem tracking (será contado no fallback)
-                                                console.warn('EPI negativo não associado a pessoa:', missingEPI, personBbox);
+                                                // Log removido para reduzir ruído no console
                                             }
                                         }
                                     }

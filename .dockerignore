@@ -1,0 +1,68 @@
+# Arquivos e pastas que NÃO devem ser copiados para o Docker
+
+# Arquivos de desenvolvimento
+archive/
+dev/
+athena_training_2phase_optimized/
+logs/
+*.log
+athena_*.log
+
+# Arquivos temporários e cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Arquivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de ambiente
+.env
+.env.*
+.venv/
+venv/
+env/
+
+# Arquivos de Git
+.git/
+.gitignore
+.gitattributes
+
+# Arquivos de documentação (opcional - manter se quiser)
+# README.md
+
+# Arquivos de backup
+*.bak
+*.backup
+
+# Arquivos de teste (se não forem necessários)
+# tests/
+
+# Arquivos de relatório antigos (manter estrutura, mas não arquivos antigos)
+reports/*.json
+storage/videos/*
+storage/processed/*
+storage/reports/*
+storage/snapshots/*
+
+# Arquivos de snapshot antigos
+snapshots/*
+
+# Arquivos de configuração local
+.rsync_exclude
+start_api_optimized.py
+
