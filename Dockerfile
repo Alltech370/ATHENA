@@ -17,9 +17,8 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Criar symlink para python
-RUN ln -s /usr/bin/python3.10 /usr/bin/python && \
-    ln -s /usr/bin/python3.10 /usr/bin/python3
+# Criar symlink para python (python3 já existe, só criar python)
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python
 
 # Copiar requirements primeiro (para cache de layers)
 COPY requirements.txt .
