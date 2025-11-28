@@ -3,7 +3,10 @@
 // Configuração global
 const CONFIG = {
     API: {
-        BASE_URL: window.location.origin,
+        // Usar API_BASE_URL se definido (Vercel), senão usar origin (desenvolvimento local)
+        BASE_URL: (window.API_BASE_URL && window.API_BASE_URL.trim() !== '') 
+            ? window.API_BASE_URL 
+            : window.location.origin,
         ENDPOINTS: {
             HEALTH: '/health',
             STATUS: '/status',
