@@ -121,14 +121,10 @@ class AthenaDetector:
         required_epis_env = os.getenv("REQUIRED_EPIS", "helmet,safety-vest,gloves,glasses")
         self.required_epis = set([e.strip() for e in required_epis_env.split(',') if e.strip()])
         
-        # Classes do modelo
-        self.class_names = [
-            'person', 'ear', 'ear-mufs', 'face', 'face-guard', 'face-mask-medical', 
-            'foot', 'tools', 'glasses', 'gloves', 'helmet', 'hands', 'head', 
-            'medical-suit', 'shoes', 'safety-suit', 'safety-vest'
-        ]
-        
-        self.enabled_classes = set(self.class_names)
+        # Classes do modelo - serão carregadas do modelo real em initialize_model()
+        # NÃO usar valores mockados - sempre carregar do modelo best.pt
+        self.class_names = []  # Será preenchido quando o modelo for carregado
+        self.enabled_classes = set()  # Será preenchido quando o modelo for carregado
         self.main_classes = ['person', 'helmet', 'safety-vest', 'gloves', 'glasses']
         
         # Estado do sistema
@@ -197,10 +193,17 @@ class AthenaDetector:
             
             self.model = YOLO(str(self.model_path))
             
-            logger.info(f"📋 Classes carregadas: {len(self.model.names)}")
+            # IMPORTANTE: Carregar classes REAIS do modelo best.pt
+            # self.model.names é um dicionário {id: nome} que vem diretamente do modelo treinado
+            model_classes = list(self.model.names.values())
+            logger.info(f"📋 Classes carregadas do modelo: {len(model_classes)}")
+            logger.info(f"📋 Classes do modelo best.pt: {model_classes}")
             
-            self.class_names = list(self.model.names.values())
+            # Usar classes REAIS do modelo, não valores mockados
+            self.class_names = model_classes
             self.enabled_classes = set(self.class_names)
+            
+            logger.info(f"✅ Classes do modelo vinculadas: {self.class_names}")
             
             if torch.cuda.is_available():
                 self.device = torch.device('cuda')
@@ -540,25 +543,34 @@ class AthenaDetector:
         # EPIs únicos detectados (dinâmico)
         detected_epi_classes = set(d.get('class_name') for d in epis_raw)
         
-        # EPIs requeridos = usar required_epis da config (não só os detectados)
-        # Se não detectar EPIs, ainda devemos verificar se estão faltando
+        # EPIs requeridos = usar EPIs selecionados (enabled_classes) que são EPIs válidos
+        # Filtrar apenas EPIs (excluir partes do corpo como person, face, hands, head, foot, ear)
+        body_parts = {'person', 'face', 'hands', 'head', 'foot', 'ear'}
+        
+        # EPIs habilitados = classes habilitadas que não são partes do corpo
+        enabled_epis = {cls for cls in self.enabled_classes if cls not in body_parts}
+        
+        # EPIs requeridos = EPIs habilitados (selecionados pelo usuário)
+        # Também considerar EPIs da config REQUIRED_EPIS se estiverem habilitados
         active_required = set()
-        # Primeiro, adicionar todos os EPIs requeridos que estão habilitados
+        
+        # Adicionar EPIs habilitados (selecionados na interface)
+        active_required.update(enabled_epis)
+        
+        # Adicionar EPIs da config REQUIRED_EPIS se estiverem habilitados (compatibilidade)
         for req_epi in self.required_epis:
             if req_epi in self.enabled_classes:
                 active_required.add(req_epi)
-        # Também adicionar EPIs detectados que estão nos requeridos
-        for epi_class in detected_epi_classes:
-            if epi_class in self.enabled_classes:
-                if epi_class in self.required_epis:
-                    active_required.add(epi_class)
-                # Mapear aliases comuns
-                alias_map = {
-                    'ear-mufs': 'ear-plugs',
-                    'ear': 'ear-plugs'
-                }
-                if epi_class in alias_map and alias_map[epi_class] in self.required_epis:
-                    active_required.add(alias_map[epi_class])
+        
+        # Mapear aliases comuns para EPIs
+        alias_map = {
+            'ear-mufs': 'ear-plugs',
+            'ear': 'ear-plugs'
+        }
+        # Adicionar aliases se o EPI original estiver habilitado
+        for epi_class in list(active_required):
+            if epi_class in alias_map and alias_map[epi_class] in self.required_epis:
+                active_required.add(alias_map[epi_class])
         # Suportes anatômicos
         supports_head: List[Dict[str, Any]] = [d for d in detections if d.get('class_name') in ('head', 'face')]
         supports_hands: List[Dict[str, Any]] = [d for d in detections if d.get('class_name') == 'hands']

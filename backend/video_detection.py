@@ -64,13 +64,19 @@ class VideoAIDetector:
         return model_path
     
     def load_model(self) -> bool:
-        """Carrega o modelo YOLOv11"""
+        """Carrega o modelo YOLOv11 e obtém classes REAIS do modelo best.pt"""
         try:
             logger.info(f"Carregando modelo: {self.model_path}")
             from ultralytics import YOLO
             self.model = YOLO(str(self.model_path))
             logger.info(f"✅ Modelo YOLOv11 carregado com sucesso")
-            logger.info(f"📋 Classes disponíveis: {len(self.model.names)}")
+            
+            # IMPORTANTE: self.model.names contém as classes REAIS do modelo best.pt
+            # Não são valores mockados - vêm diretamente do arquivo do modelo treinado
+            model_classes = list(self.model.names.values())
+            logger.info(f"📋 Classes REAIS do modelo best.pt: {len(model_classes)}")
+            logger.info(f"📋 Classes: {model_classes}")
+            
             return True
         except Exception as e:
             logger.error(f"❌ Erro ao carregar modelo: {e}")
@@ -253,6 +259,8 @@ class VideoAIDetector:
                                 x1, y1, x2, y2 = int(x1 / scale), int(y1 / scale), int(x2 / scale), int(y2 / scale)
                                 
                                 class_id = int(boxes.cls[i])
+                                # IMPORTANTE: Usar classes REAIS do modelo best.pt
+                                # self.model.names[class_id] vem diretamente do modelo treinado
                                 class_name = self.model.names[class_id]
                                 
                                 detection_data = {
@@ -367,12 +375,53 @@ class VideoAIDetector:
         
         return filtered
     
+    def _get_enabled_epis(self) -> set:
+        """
+        Obtém EPIs habilitados do sistema principal.
+        IMPORTANTE: Usa EPIs selecionados pelo usuário baseados nas classes REAIS do modelo best.pt.
+        Retorna apenas EPIs (exclui partes do corpo).
+        """
+        try:
+            # Tentar obter do sistema principal (que carrega classes do modelo real)
+            from backend.api_optimized import app_state
+            if app_state.detection_system and app_state.detection_system.detector:
+                detector = app_state.detection_system.detector
+                if hasattr(detector, 'get_enabled_classes'):
+                    # Obter classes habilitadas (que vêm do modelo real via detector.class_names)
+                    enabled_all = detector.get_enabled_classes()
+                    logger.debug(f"📋 Classes habilitadas do modelo real: {enabled_all}")
+                    
+                    # Filtrar apenas EPIs (excluir partes do corpo)
+                    body_parts = {'person', 'face', 'hands', 'head', 'foot', 'ear'}
+                    enabled_epis = {cls for cls in enabled_all if cls not in body_parts}
+                    
+                    if enabled_epis:
+                        logger.info(f"✅ Usando EPIs selecionados do modelo real: {enabled_epis}")
+                        return enabled_epis
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao obter EPIs habilitados do sistema principal: {e}")
+        
+        # Fallback: usar EPIs da config ou padrão (apenas se não conseguir do sistema principal)
+        try:
+            from core.config import Config
+            fallback_epis = Config.REQUIRED_EPIS
+            logger.warning(f"⚠️ Usando EPIs da config (fallback): {fallback_epis}")
+            return fallback_epis
+        except:
+            # Fallback final: EPIs padrão (não ideal, mas necessário)
+            fallback_epis = {'helmet', 'safety-vest', 'gloves', 'glasses'}
+            logger.warning(f"⚠️ Usando EPIs padrão (fallback final): {fallback_epis}")
+            return fallback_epis
+    
     def _analyze_missing_epis(self, person: Dict, epi_detections: List[Dict], person_bbox: List[int]) -> List[str]:
-        """Analisa quais EPIs estão faltando para uma pessoa"""
+        """
+        Analisa quais EPIs estão faltando para uma pessoa.
+        Usa os EPIs habilitados/selecionados no sistema.
+        """
         missing = []
         
-        # EPIs requeridos
-        required_epis = ['helmet', 'safety-vest']  # Pode ser configurável
+        # Obter EPIs requeridos do sistema (selecionados pelo usuário)
+        required_epis = self._get_enabled_epis()
         
         # Verificar quais EPIs estão presentes perto da pessoa
         px1, py1, px2, py2 = person_bbox
@@ -386,15 +435,27 @@ class VideoAIDetector:
             # Verificar se EPI está dentro ou próximo da pessoa
             if (px1 <= epi_center[0] <= px2 and py1 <= epi_center[1] <= py2):
                 class_name = epi['class_name']
-                # Mapear classes do modelo para EPIs
-                if class_name in ['helmet', 'ear', 'ear-mufs']:
-                    present_epis.add('helmet')
-                elif class_name in ['safety-vest', 'vest', 'safety-suit']:
-                    present_epis.add('safety-vest')
+                # Adicionar EPI detectado diretamente
+                present_epis.add(class_name)
+                
+                # Mapear aliases comuns
+                if class_name in ['ear', 'ear-mufs']:
+                    present_epis.add('ear-mufs')  # Normalizar para ear-mufs
+                elif class_name in ['safety-vest', 'safety-suit']:
+                    present_epis.add('safety-vest')  # Normalizar para safety-vest
         
-        # Verificar quais EPIs estão faltando
+        # Verificar quais EPIs requeridos estão faltando
         for required in required_epis:
-            if required not in present_epis:
+            # Verificar se o EPI requerido está presente (com aliases)
+            is_present = False
+            if required in present_epis:
+                is_present = True
+            elif required == 'ear-mufs' and ('ear' in present_epis or 'ear-mufs' in present_epis):
+                is_present = True
+            elif required == 'safety-vest' and ('safety-vest' in present_epis or 'safety-suit' in present_epis):
+                is_present = True
+            
+            if not is_present:
                 missing.append(required)
         
         return missing

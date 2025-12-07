@@ -97,6 +97,12 @@ class VideoReportSystem:
             positive_by_class = self._count_by_class(positive_detections)
             negative_by_class = self._count_by_class(negative_detections)
             
+            # Calcular estatísticas temporais para gráficos
+            temporal_stats = self._calculate_temporal_statistics(positive_detections, negative_detections, video_results.get('total_frames', 0))
+            
+            # Calcular distribuição de confiança para gráficos
+            confidence_distribution = self._calculate_confidence_distribution(positive_detections, negative_detections)
+            
             # Estatísticas dinâmicas - todas as classes
             stats = {
                 'total_frames': video_results.get('total_frames', 0),
@@ -114,7 +120,11 @@ class VideoReportSystem:
                 'com_colete': positive_by_class.get('safety-vest', 0),
                 'sem_colete': negative_by_class.get('missing-safety-vest', 0),
                 # Estatísticas por tipo de EPI
-                'epi_statistics': self._calculate_epi_statistics(positive_detections, negative_detections)
+                'epi_statistics': self._calculate_epi_statistics(positive_detections, negative_detections),
+                # Dados para gráficos
+                'temporal_stats': temporal_stats,
+                'confidence_distribution': confidence_distribution,
+                'top_missing_epis': self._get_top_missing_epis(negative_detections)
             }
             
             # Criar relatório completo
@@ -254,6 +264,93 @@ class VideoReportSystem:
         logger.info(f"✅ CSV exportado: {output_path} ({len(csv_rows)} linhas)")
         
         return output_path
+    
+    def _calculate_temporal_statistics(self, positive_detections: List[Dict], negative_detections: List[Dict], total_frames: int) -> Dict[str, Any]:
+        """
+        Calcula estatísticas temporais para gráfico de linha (compliance ao longo do tempo)
+        Agrupa por intervalos de frames para visualização
+        """
+        if total_frames == 0:
+            return {'frames': [], 'compliance_scores': [], 'positive_counts': [], 'negative_counts': []}
+        
+        # Dividir em intervalos (máximo 50 pontos para performance)
+        num_intervals = min(50, total_frames)
+        interval_size = max(1, total_frames // num_intervals)
+        
+        frames = []
+        compliance_scores = []
+        positive_counts = []
+        negative_counts = []
+        
+        for i in range(0, total_frames, interval_size):
+            frame_start = i
+            frame_end = min(i + interval_size, total_frames)
+            
+            # Contar detecções neste intervalo
+            pos_count = sum(1 for d in positive_detections 
+                          if frame_start <= d.get('frame_number', 0) < frame_end)
+            neg_count = sum(1 for d in negative_detections 
+                          if frame_start <= d.get('frame_number', 0) < frame_end)
+            
+            total_in_interval = pos_count + neg_count
+            compliance = (pos_count / total_in_interval * 100) if total_in_interval > 0 else 0
+            
+            frames.append(frame_end)
+            compliance_scores.append(round(compliance, 2))
+            positive_counts.append(pos_count)
+            negative_counts.append(neg_count)
+        
+        return {
+            'frames': frames,
+            'compliance_scores': compliance_scores,
+            'positive_counts': positive_counts,
+            'negative_counts': negative_counts
+        }
+    
+    def _calculate_confidence_distribution(self, positive_detections: List[Dict], negative_detections: List[Dict]) -> Dict[str, List]:
+        """
+        Calcula distribuição de confiança para gráfico de histograma
+        Agrupa detecções em intervalos de confiança
+        """
+        # Intervalos de confiança: 0-0.2, 0.2-0.4, 0.4-0.6, 0.6-0.8, 0.8-1.0
+        intervals = ['0.0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0']
+        positive_dist = [0] * 5
+        negative_dist = [0] * 5
+        
+        for det in positive_detections:
+            conf = det.get('confidence', 0.0)
+            idx = min(4, int(conf * 5))
+            positive_dist[idx] += 1
+        
+        for det in negative_detections:
+            conf = det.get('confidence', 0.0)
+            idx = min(4, int(conf * 5))
+            negative_dist[idx] += 1
+        
+        return {
+            'intervals': intervals,
+            'positive': positive_dist,
+            'negative': negative_dist
+        }
+    
+    def _get_top_missing_epis(self, negative_detections: List[Dict], top_n: int = 10) -> List[Dict[str, Any]]:
+        """
+        Retorna os top N EPIs mais ausentes para gráfico de barras horizontal
+        """
+        missing_counts = defaultdict(int)
+        
+        for det in negative_detections:
+            missing_epi = det.get('missing_epi') or det.get('class_name', '').replace('missing-', '')
+            if missing_epi:
+                missing_counts[missing_epi] += 1
+        
+        # Ordenar por contagem (decrescente) e pegar top N
+        sorted_missing = sorted(missing_counts.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        
+        return [
+            {'epi_name': epi, 'count': count, 'percentage': 0}  # percentage será calculado no frontend
+            for epi, count in sorted_missing
+        ]
     
     def list_reports(self) -> List[Dict[str, Any]]:
         """Lista todos os relatórios disponíveis"""

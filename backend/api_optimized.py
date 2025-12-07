@@ -894,33 +894,70 @@ async def health_check():
         }
     }
 
+def _get_epi_classes(all_classes: List[str]) -> List[str]:
+    """
+    Filtra classes para retornar apenas EPIs (Equipamentos de Proteção Individual).
+    Exclui partes do corpo que não são EPIs.
+    """
+    # Partes do corpo que NÃO são EPIs (suportes anatômicos)
+    body_parts = {'person', 'face', 'hands', 'head', 'foot', 'ear'}
+    
+    # EPIs são todas as classes que não são partes do corpo
+    epi_classes = [cls for cls in all_classes if cls not in body_parts]
+    
+    return sorted(epi_classes)
+
 @app.get("/classes")
 async def get_model_classes():
-    """Retorna as classes do modelo carregado"""
+    """
+    Retorna as classes do modelo carregado - APENAS EPIs selecionáveis.
+    IMPORTANTE: Usa classes REAIS do modelo best.pt, não valores mockados.
+    """
     if not app_state.detection_system or not app_state.detection_system.detector:
         raise HTTPException(status_code=503, detail="Sistema de detecção não inicializado")
     
     # Obter classes do detector
     detector = app_state.detection_system.detector
-    if hasattr(detector, 'class_names'):
-        return {
-            "class_names": detector.class_names,
-            "enabled_classes": detector.get_enabled_classes() if hasattr(detector, 'get_enabled_classes') else detector.class_names,
-            "total_classes": len(detector.class_names),
-            "model_path": str(detector.model_path) if hasattr(detector, 'model_path') else "unknown"
-        }
-    else:
-        # Fallback para classes padrão do modelo best.pt
-        from backend.config import CONFIG
-        return {
-            "class_names": [
-                'person', 'ear', 'ear-mufs', 'face', 'face-guard', 'face-mask-medical', 
-                'foot', 'tools', 'glasses', 'gloves', 'helmet', 'hands', 'head', 
-                'medical-suit', 'shoes', 'safety-suit', 'safety-vest'
-            ],
-            "total_classes": 17,
-            "model_path": CONFIG.MODEL_PATH
-        }
+    
+    # Verificar se o modelo foi inicializado e tem classes carregadas
+    if not hasattr(detector, 'class_names') or not detector.class_names:
+        raise HTTPException(
+            status_code=503, 
+            detail="Modelo não inicializado. As classes serão carregadas do modelo best.pt quando o modelo for carregado."
+        )
+    
+    # Usar classes REAIS do modelo best.pt (carregadas via self.model.names.values())
+    all_classes = detector.class_names
+    
+    # Verificar se as classes vieram do modelo (não são mockadas)
+    if not all_classes:
+        raise HTTPException(
+            status_code=503,
+            detail="Classes do modelo não disponíveis. Aguarde a inicialização do modelo best.pt."
+        )
+    
+    # Filtrar apenas EPIs (excluir partes do corpo)
+    epi_classes = _get_epi_classes(all_classes)
+    
+    # Obter classes habilitadas e filtrar apenas EPIs
+    enabled_all = detector.get_enabled_classes() if hasattr(detector, 'get_enabled_classes') else all_classes
+    enabled_epis = [cls for cls in enabled_all if cls in epi_classes]
+    
+    # Obter caminho do modelo para confirmação
+    model_path = str(detector.model_path) if hasattr(detector, 'model_path') else "unknown"
+    
+    logger.info(f"📋 Retornando classes REAIS do modelo: {model_path}")
+    logger.info(f"📋 Total de classes do modelo: {len(all_classes)}")
+    logger.info(f"📋 EPIs disponíveis: {epi_classes}")
+    
+    return {
+        "class_names": epi_classes,  # Apenas EPIs (do modelo real)
+        "enabled_classes": enabled_epis,  # Apenas EPIs habilitados
+        "total_classes": len(epi_classes),
+        "all_classes": all_classes,  # Todas as classes do modelo (incluindo partes do corpo) para referência
+        "model_path": model_path,
+        "source": "model"  # Indica que veio do modelo real, não mockado
+    }
 
 @app.get("/classes/enabled")
 async def get_enabled_classes():
@@ -935,14 +972,39 @@ class ClassesUpdate(BaseModel):
 
 @app.put("/classes/enabled")
 async def update_enabled_classes(payload: ClassesUpdate):
+    """
+    Atualiza classes habilitadas - APENAS EPIs podem ser selecionados.
+    A classe 'person' é sempre mantida habilitada para detecção de pessoas.
+    """
     if not app_state.detection_system or not app_state.detection_system.detector:
         raise HTTPException(status_code=503, detail="Sistema de detecção não inicializado")
     detector = app_state.detection_system.detector
     if not hasattr(detector, 'set_enabled_classes'):
         raise HTTPException(status_code=500, detail="Detector não suporta atualização de classes")
     try:
-        detector.set_enabled_classes(payload.enabled_classes)
-        return {"enabled_classes": detector.get_enabled_classes()}
+        # Filtrar apenas EPIs válidos do modelo
+        all_classes = detector.class_names if hasattr(detector, 'class_names') else []
+        epi_classes = _get_epi_classes(all_classes)
+        
+        # Validar que todas as classes selecionadas são EPIs válidos
+        valid_epis = [epi for epi in payload.enabled_classes if epi in epi_classes]
+        
+        # Sempre manter 'person' habilitada (necessária para detecção)
+        classes_to_enable = valid_epis.copy()
+        if 'person' in all_classes:
+            classes_to_enable.append('person')
+        
+        # Atualizar detector com EPIs selecionados + person
+        detector.set_enabled_classes(classes_to_enable)
+        
+        # Retornar apenas EPIs habilitados (sem person)
+        enabled_all = detector.get_enabled_classes()
+        enabled_epis = [cls for cls in enabled_all if cls in epi_classes]
+        
+        return {
+            "enabled_classes": enabled_epis,
+            "message": f"{len(enabled_epis)} EPIs habilitados"
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao atualizar classes: {str(e)}")
 

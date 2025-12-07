@@ -366,8 +366,61 @@
                     <div class="floating-card rounded-xl p-6">
                         <h3 class="text-2xl font-bold text-athena-cream mb-6">Relatório de Detecções</h3>
                         
-                        <!-- Gráfico -->
-                        <div class="floating-card rounded-xl p-6">
+                        <!-- Gráficos -->
+                        <div x-show="videoReport" class="space-y-6">
+                            <!-- Gráfico 1: Compliance ao Longo do Tempo -->
+                            <div class="floating-card rounded-xl p-6">
+                                <h4 class="text-lg font-semibold text-athena-cream mb-4">
+                                    <i class="fas fa-chart-line mr-2"></i>Compliance Score ao Longo do Tempo
+                                </h4>
+                                <div class="h-80 w-full">
+                                    <canvas id="complianceTimeChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- Gráfico 2: EPIs Presentes vs Ausentes (Pizza) -->
+                            <div class="floating-card rounded-xl p-6">
+                                <h4 class="text-lg font-semibold text-athena-cream mb-4">
+                                    <i class="fas fa-chart-pie mr-2"></i>Distribuição Geral: Presentes vs Ausentes
+                                </h4>
+                                <div class="h-80 w-full">
+                                    <canvas id="compliancePieChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- Gráfico 3: EPIs por Tipo (Barras) -->
+                            <div class="floating-card rounded-xl p-6">
+                                <h4 class="text-lg font-semibold text-athena-cream mb-4">
+                                    <i class="fas fa-chart-bar mr-2"></i>EPIs por Tipo: Presentes vs Ausentes
+                                </h4>
+                                <div class="h-80 w-full">
+                                    <canvas id="epiByTypeChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- Gráfico 4: Top EPIs Mais Ausentes (Barras Horizontal) -->
+                            <div class="floating-card rounded-xl p-6">
+                                <h4 class="text-lg font-semibold text-athena-cream mb-4">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>Top EPIs Mais Ausentes
+                                </h4>
+                                <div class="h-80 w-full">
+                                    <canvas id="topMissingChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- Gráfico 5: Distribuição de Confiança -->
+                            <div class="floating-card rounded-xl p-6">
+                                <h4 class="text-lg font-semibold text-athena-cream mb-4">
+                                    <i class="fas fa-chart-area mr-2"></i>Distribuição de Confiança das Detecções
+                                </h4>
+                                <div class="h-80 w-full">
+                                    <canvas id="confidenceChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Gráfico antigo (manter para compatibilidade) -->
+                        <div class="floating-card rounded-xl p-6" x-show="!videoReport">
                             <h4 class="text-lg font-semibold text-athena-cream mb-4">Estatísticas de Detecção</h4>
                             <div class="h-80 w-full">
                                 <canvas id="reportChart"></canvas>
@@ -507,29 +560,36 @@
                      x-transition:enter="animate-fade-in" 
                      class="space-y-6">
                     <div class="floating-card rounded-xl p-6">
-                        <h3 class="text-2xl font-bold text-athena-cream mb-6">Classes de Detecção</h3>
+                        <h3 class="text-2xl font-bold text-athena-cream mb-6">Seleção de EPIs</h3>
+                        <p class="text-athena-cream/70 text-sm mb-4">
+                            Selecione os EPIs (Equipamentos de Proteção Individual) que devem ser monitorados pelo modelo. 
+                            Apenas os EPIs selecionados serão considerados nas detecções em streaming ao vivo e uploads de vídeo.
+                        </p>
                         
                         <div class="mb-4 flex items-center justify-between">
-                            <p class="text-athena-cream/80 text-sm">Total: <span class="font-semibold" x-text="classesInfo.total_classes"></span> classes</p>
+                            <p class="text-athena-cream/80 text-sm">
+                                Total: <span class="font-semibold" x-text="classesInfo.total_classes"></span> EPIs disponíveis | 
+                                Selecionados: <span class="font-semibold" x-text="classesInfo.active_classes.length"></span>
+                            </p>
                             <button @click="saveEnabledClasses()" class="athena-gradient-primary px-4 py-2 rounded-lg text-athena-cream font-semibold hover:scale-105 transition-transform">
-                                <i class="fas fa-save mr-2"></i>Salvar
+                                <i class="fas fa-save mr-2"></i>Salvar EPIs Selecionados
                                     </button>
                             </div>
                             
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <template x-for="(className, index) in classesInfo.class_names" :key="index">
-                                <label class="floating-card rounded-lg p-4 cursor-pointer flex items-center justify-between">
+                                <label class="floating-card rounded-lg p-4 cursor-pointer flex items-center justify-between hover:bg-athena-navy/50 transition-colors">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-8 h-8 athena-gradient-primary rounded-lg flex items-center justify-center">
                                             <span class="text-xs font-bold text-athena-cream" x-text="index + 1"></span>
                                         </div>
                                             <div>
                                             <h4 class="font-semibold text-athena-cream" x-text="className"></h4>
-                                            <p class="text-xs text-athena-cream/60">Classe de detecção</p>
+                                            <p class="text-xs text-athena-cream/60">EPI do modelo</p>
                                             </div>
                                         </div>
                                             <input type="checkbox" 
-                                           class="h-5 w-5 rounded border-athena-gold/30 text-athena-gold"
+                                           class="h-5 w-5 rounded border-athena-gold/30 text-athena-gold focus:ring-2 focus:ring-athena-gold"
                                                    :checked="classesInfo.active_classes.includes(className)"
                                                    @change="toggleClass(className)"
                                     />

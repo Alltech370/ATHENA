@@ -805,10 +805,291 @@ function athenaApp() {
             }
         },
 
+        // Variáveis para gráficos
+        complianceTimeChart: null,
+        compliancePieChart: null,
+        epiByTypeChart: null,
+        topMissingChart: null,
+        confidenceChart: null,
+        
         // Carregar dados do relatório
         loadReportData() {
-            // Desabilitar gráfico temporariamente para evitar erros
-            console.log('📊 Relatório carregado (gráfico desabilitado temporariamente)');
+            console.log('📊 Carregando dados do relatório...');
+            // Inicializar gráficos quando o relatório estiver disponível
+            if (this.videoReport) {
+                this.$nextTick(() => {
+                    this.initAllCharts();
+                });
+            }
+        },
+        
+        // Inicializar todos os gráficos
+        initAllCharts() {
+            if (!this.videoReport || !this.videoReport.statistics) {
+                console.warn('⚠️ Relatório não disponível para gráficos');
+                return;
+            }
+            
+            this.initComplianceTimeChart();
+            this.initCompliancePieChart();
+            this.initEpiByTypeChart();
+            this.initTopMissingChart();
+            this.initConfidenceChart();
+        },
+        
+        // Gráfico 1: Compliance ao longo do tempo
+        initComplianceTimeChart() {
+            const ctx = document.getElementById('complianceTimeChart');
+            if (!ctx) return;
+            
+            if (this.complianceTimeChart) {
+                this.complianceTimeChart.destroy();
+            }
+            
+            const stats = this.videoReport.statistics;
+            const temporal = stats.temporal_stats || { frames: [], compliance_scores: [] };
+            
+            this.complianceTimeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: temporal.frames.map(f => `Frame ${f}`),
+                    datasets: [{
+                        label: 'Compliance Score (%)',
+                        data: temporal.compliance_scores,
+                        borderColor: '#fbbf24', // athena-gold
+                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `Compliance: ${context.parsed.y}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: (v) => v + '%' }
+                        }
+                    }
+                }
+            });
+        },
+        
+        // Gráfico 2: Pizza - Presentes vs Ausentes
+        initCompliancePieChart() {
+            const ctx = document.getElementById('compliancePieChart');
+            if (!ctx) return;
+            
+            if (this.compliancePieChart) {
+                this.compliancePieChart.destroy();
+            }
+            
+            const stats = this.videoReport.statistics;
+            const positive = stats.total_positive_detections || 0;
+            const negative = stats.total_negative_detections || 0;
+            
+            this.compliancePieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['EPIs Presentes', 'EPIs Ausentes'],
+                    datasets: [{
+                        data: [positive, negative],
+                        backgroundColor: ['#10b981', '#ef4444'], // green, red
+                        borderColor: '#1e293b',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const total = positive + negative;
+                                    const percent = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+                                    return `${context.label}: ${context.parsed} (${percent}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+        
+        // Gráfico 3: Barras - EPIs por tipo
+        initEpiByTypeChart() {
+            const ctx = document.getElementById('epiByTypeChart');
+            if (!ctx) return;
+            
+            if (this.epiByTypeChart) {
+                this.epiByTypeChart.destroy();
+            }
+            
+            const stats = this.videoReport.statistics;
+            const epiStats = stats.epi_statistics || {};
+            
+            // Preparar dados
+            const epiNames = Object.keys(epiStats);
+            const presentData = epiNames.map(epi => epiStats[epi].present || 0);
+            const missingData = epiNames.map(epi => epiStats[epi].missing || 0);
+            
+            this.epiByTypeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: epiNames.map(n => n.replace('missing-', '')),
+                    datasets: [
+                        {
+                            label: 'Presentes',
+                            data: presentData,
+                            backgroundColor: '#10b981'
+                        },
+                        {
+                            label: 'Ausentes',
+                            data: missingData,
+                            backgroundColor: '#ef4444'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        x: { stacked: false },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        },
+        
+        // Gráfico 4: Barras Horizontal - Top EPIs ausentes
+        initTopMissingChart() {
+            const ctx = document.getElementById('topMissingChart');
+            if (!ctx) return;
+            
+            if (this.topMissingChart) {
+                this.topMissingChart.destroy();
+            }
+            
+            const stats = this.videoReport.statistics;
+            let topMissing = stats.top_missing_epis || [];
+            
+            if (topMissing.length === 0) {
+                // Se não houver dados, criar a partir de negative_by_class
+                const negativeByClass = stats.negative_by_class || {};
+                const totalNegative = stats.total_negative_detections || 1;
+                topMissing = Object.entries(negativeByClass)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([name, count]) => ({
+                        epi_name: name.replace('missing-', ''),
+                        count: count,
+                        percentage: ((count / totalNegative) * 100).toFixed(1)
+                    }));
+            } else {
+                // Calcular porcentagens se não estiverem presentes
+                const totalNegative = stats.total_negative_detections || 1;
+                topMissing = topMissing.map(item => ({
+                    ...item,
+                    percentage: item.percentage || ((item.count / totalNegative) * 100).toFixed(1)
+                }));
+            }
+            
+            this.topMissingChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: topMissing.map(item => `${item.epi_name} (${item.percentage}%)`),
+                    datasets: [{
+                        label: 'Ocorrências',
+                        data: topMissing.map(item => item.count),
+                        backgroundColor: '#ef4444'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const item = topMissing[context.dataIndex];
+                                    return `${item.epi_name}: ${item.count} ocorrências (${item.percentage}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        },
+        
+        // Gráfico 5: Distribuição de confiança
+        initConfidenceChart() {
+            const ctx = document.getElementById('confidenceChart');
+            if (!ctx) return;
+            
+            if (this.confidenceChart) {
+                this.confidenceChart.destroy();
+            }
+            
+            const stats = this.videoReport.statistics;
+            const confDist = stats.confidence_distribution || {
+                intervals: ['0.0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'],
+                positive: [0, 0, 0, 0, 0],
+                negative: [0, 0, 0, 0, 0]
+            };
+            
+            this.confidenceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: confDist.intervals,
+                    datasets: [
+                        {
+                            label: 'Detecções Positivas',
+                            data: confDist.positive,
+                            backgroundColor: '#10b981'
+                        },
+                        {
+                            label: 'Detecções Negativas',
+                            data: confDist.negative,
+                            backgroundColor: '#ef4444'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Intervalo de Confiança' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Quantidade de Detecções' }
+                        }
+                    }
+                }
+            });
         },
 
         // Tirar snapshot
@@ -1229,6 +1510,10 @@ function athenaApp() {
             const report = this.generateRealtimeReport();
             if (report) {
                 this.videoReport = report;
+                // Atualizar gráficos quando o relatório mudar
+                this.$nextTick(() => {
+                    this.initAllCharts();
+                });
                 // Salvar no backend periodicamente (a cada 50 detecções)
                 if (this.detectionLogs.length % 50 === 0) {
                     this.saveRealtimeReportSilently(report);
